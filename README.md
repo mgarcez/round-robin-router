@@ -10,13 +10,47 @@ The router also contains a simple Circuit Breaker to handle the cases when one o
 
 ## Circuit Breaker
 
-TODO
+The Circuit Breaker implemented here is very basic:
+- The circuit opens when the number of consecutive reported errors reach `CONSECUTIVE_FAILURE_THRESHOLD`.
+- The circuit closes again after waiting `RESET_TIMEOUT_MS` from the last failure.
+- There is no half-open mechanism implemented in this implementation. 
+- Slow requests (above `SLOW_CALL_DURATION_THRESHOLD_MS`) are simply reported as a failure to the circuit breaker.
 
 ## Usage
 
-TODO
+Step 1: Start several instances of Application API servers
+
+Step 2: Start the router
+```shell
+# Compile
+./mvnw clean install
+
+# Start the server
+./mvnw spring-boot:run
+```
+
+Step 3: Send POST requests
+```shell
+# Example
+curl -X POST -H "Content-Type: application/json" -d '{
+  "game": "Mobile Legends",
+  "gamerID": "GYUTDTE",
+  "points": 20
+}' http://localhost:8080/api/router
+```
 
 ## Possible improvements 
+
+To sum-up, the most important improvements would be:
+- Improve throughput with a reactive framework (e.g `Vert.x`)
+- Improve timeout mechanism
+- use an existing Circuit Breaker library (e.g `resilience4j`), including features such as:
+  - HALF_OPEN
+  - differentiate between slow requests and failures
+  - use sliding windows
+- Optional: use Round Robin with a Dynamic Weight Adjustment 
+
+More details on the improvements below:
 
 ### Throughput 
 
@@ -36,64 +70,46 @@ However, from Spring 5.0, `AsyncRestTemplate` is being deprecated in favour of S
 - Use Spring Reactive framework (`WebFlux`)
 - Use another reactive framework. 
 One very good candidate for this router use-case would be `Vert.x` (or `Quarkus`, which uses `Vert.x`)
+
 ### Slow servers handling
-  - TODO
+  - With current implementation, slow requests (above `SLOW_CALL_DURATION_THRESHOLD_MS`) are simply reported as a failure to the circuit breaker.
+It would be better to differentiate failures and slow requests at circuit breaker level.
+  - Please also see `Timeout` section below regarding limitations on the matter.
+  - Adjust Round Robin Logic with `Dynamic Weight Adjustment`: reduce the weight of slow instances in the round-robin rotation, making them less likely to receive
+requests until their response times improve.
 
 ### Circuit breaker 
 
 - Use an existing library instead of doing it ourselves (e.g: https://resilience4j.readme.io/docs/circuitbreaker)
 - After `RESET_TIMEOUT` is reached, the current implementation is directly closing the circuit. 
   It would be better, to implement a `HALF_OPEN` state, which permits a configurable number of calls to see if the backend is still unavailable or has become available again.
-- Check if synchronisation can be reduced, with more optimistic locking using to Atomic variables.
-- using Sliding Window TODO
+- Check if synchronisation can be reduced, with more optimistic locking using Atomic variables.
+- Use a Sliding Window instead of counting the number of consecutive errors
   
-### Other 
-- If POST requests are idempotent (for example, by using a requestId), we can implement more retry mechanism.
-- and possibly timeout
-- retries when possible
+### Timeout 
+- Implement timeout to better handler requests taking too long. 
+(However, depending on the use case, it may be better to still continue waiting if requests cannot be retried because of
+idempotency issues).
+- Report failure to the Circuit breaker as soon as `SLOW_CALL_DURATION_THRESHOLD_MS` is reached.
+At the moment, the application is still waiting for the call to finish before reporting the failure. This can be very inefficient.
 
-### Application URLs configuration:
-  - Use service discovery to add/remove servers
-  - Use config to change server list (either with dynamic reload, or with restarting service)
+### Retry
+- Be more fined-grained on detecting retryable errors. And potentially retry them directly at router level.
+- If POST requests are idempotent (for example, by using a requestId), we can implement even more retry mechanisms.
 
-  - TODO
+### Configuration
+
+Make most Circuit Breaker variables configurable (`SLOW_CALL_DURATION_THRESHOLD_MS`, `RESET_TIMEOUT`, ...) using
+a configuration file. Or even better, a configuration server.
+
+Application URLs configuration:
+  - Use service discovery to dynamically add/remove servers
+  - OR use config server to change server list (either with dynamic reload, or by restarting the router)
 
 ### Production-ready improvements
 
-- Implement monitoring. Most of the monitoring implementation can be out-of-the box if we use existing Circuit breaker libraries (e.g: resilience4j)
-- JMeter load testing
-- Improve logging
+- Monitoring. Most of the monitoring implementation can be out-of-the box if we use existing Circuit breaker libraries (e.g: resilience4j)
+- Perform load testing
+- More testing
+- Review logging. Potentially, implement tracing.
 
-- TODO: timeout, it answer is too slow
-
-Round robin: distribute requests to each replica in turn.
-            Least loaded: maintain a count of outstanding requests to each replica, and distribute traffic to replicas
-            with the smallest number of outstanding requests.
-
-Peak EWMA: maintain a moving average of each replica’s round-trip time, weighted by the number of outstanding
-requests, and distribute traffic to replicas where that cost function is smallest.
-
-
-
-
-
-Adaptive Load Balancing: These algorithms continuously monitor server performance and adapt traffic
-distribution based on real-time metrics such as server health, response times, or resource utilization.
-
-Dynamic Weight Adjustment: Some load balancers can dynamically adjust server weights based on real-time
-conditions, allowing for automatic load distribution based on server performance.
-
-Weighted Round Robin: In this approach, each server is assigned a weight based on its capacity or performance.
- Servers with higher weights receive more requests than those with lower weights. This is useful when some
- servers are more powerful than others.
-
-
-
-
-Adjust Round Robin Logic:
-
-Modify your Round Robin logic to consider the detected slow responses. When selecting the next application API instance
-to route a request, take into account the historical response times and the flagged slow instances.
-
-For example, you could reduce the weight of slow instances in the round-robin rotation, making them less likely to receive
-requests until their response times improve.
