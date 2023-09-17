@@ -24,7 +24,7 @@ public class RouterController {
 
     private static final Logger logger = LoggerFactory.getLogger(RouterController.class);
 
-    private static final int SLOW_CALL_DURATION_THRESHOLD_MS = 5000;
+    static final int SLOW_CALL_DURATION_THRESHOLD_MS = 5000;
 
     private final AtomicInteger currentInstanceIndex = new AtomicInteger(0);
 
@@ -34,9 +34,9 @@ public class RouterController {
 
     public RouterController() {
         this(Arrays.asList(
-                "http://localhost:5000/api/endpoint",
                 "http://localhost:5001/api/endpoint",
-                "http://localhost:5002/api/endpoint")
+                "http://localhost:5002/api/endpoint",
+                "http://localhost:5003/api/endpoint")
         );
     }
 
@@ -60,13 +60,11 @@ public class RouterController {
 
     @PostMapping("/router")
     public ResponseEntity<Object> routeRequest(@RequestBody Map<String, Object> requestData) {
-
         for (int i = 0; i < applicationApiInstances.size(); i++) {
             ApplicationApiInstance applicationApiInstance = getNextInstanceUrl();
             if (applicationApiInstance.acquirePermission()) {
                 return sendRequest(requestData, applicationApiInstance);
-            }
-            else{
+            } else {
                 logger.warn("Downstream server " + applicationApiInstance.getApplicationApiUrl()
                         + " is skipped because it has its circuit open.");
             }
@@ -92,12 +90,13 @@ public class RouterController {
                         + " took too long to answer: " + (endTime - startTime) + " MS.");
                 applicationApiInstance.reportFailure();
             } else {
-                applicationApiInstance.reportSuccess();
-            }
-            if (isServerError(response)) {
-                logger.warn("Downstream server " + applicationApiInstance.getApplicationApiUrl()
-                        + " returned an HTTP error: " + response.getStatusCode());
-                applicationApiInstance.reportFailure();
+                if (isServerError(response)) {
+                    logger.warn("Downstream server " + applicationApiInstance.getApplicationApiUrl()
+                            + " returned an HTTP error: " + response.getStatusCode());
+                    applicationApiInstance.reportFailure();
+                } else {
+                    applicationApiInstance.reportSuccess();
+                }
             }
 
             return response;
@@ -106,7 +105,8 @@ public class RouterController {
                 logger.warn("Downstream server down: " + applicationApiInstance.getApplicationApiUrl());
                 applicationApiInstance.reportFailure();
             }
-            throw resourceAccessException;
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body("The downstream server is down. You can retry again."); //TODO The router should retry with another instance
         } catch (Exception e) {
             logger.error("Error processing the request for server: " + applicationApiInstance.getApplicationApiUrl(), e);
             applicationApiInstance.reportFailure();

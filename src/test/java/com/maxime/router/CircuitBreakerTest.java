@@ -3,7 +3,8 @@ package com.maxime.router;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class CircuitBreakerTest {
 
@@ -87,7 +88,7 @@ public class CircuitBreakerTest {
         circuitBreaker.reportFailure();
         assertTrue(circuitBreaker.acquirePermission());
 
-        // Reset consecutiveFailuresCount when  reportSuccess
+        // Reset consecutiveFailuresCount when reportSuccess
         circuitBreaker.reportSuccess();
         assertTrue(circuitBreaker.acquirePermission());
 
@@ -102,6 +103,4 @@ public class CircuitBreakerTest {
         assertFalse(circuitBreaker.acquirePermission());
     }
 
-    //TODO
-    // test several closes
 }

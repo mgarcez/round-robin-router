@@ -4,11 +4,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Basic Circuit Breaker.
- *
+ * <p>
  * The circuit opens when the number of consecutive reported errors reach CONSECUTIVE_FAILURE_THRESHOLD.
- *
+ * <p>
  * The circuit closes again after waiting RESET_TIMEOUT_MS from the last failure.
- *
+ * <p>
  * There is no half-open mechanism implemented in this implementation.
  */
 public class CircuitBreaker {
@@ -26,14 +26,14 @@ public class CircuitBreaker {
 
     /**
      * Acquire permission.
-     *
+     * <p>
      * Checks that the circuit is closed (i.e: circuit is already closed, or RESET_TIMEOUT_MS is reached)
      *
      * @return if the circuit is closed (and thus calls are allowed)
      */
     public synchronized boolean acquirePermission() {
         // Circuit is closed, allow requests
-        if(isClosed()){
+        if (isClosed()) {
             return true;
         }
 

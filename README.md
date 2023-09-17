@@ -39,6 +39,11 @@ curl -X POST -H "Content-Type: application/json" -d '{
 }' http://localhost:8080/api/router
 ```
 
+If you want to benchmark the router (it would be better if you run it from a different machine):
+```shell
+ab -T 'application/json'  -n 10000 -c 100 -p sample-post.data http://localhost:8080/api/router
+```
+
 ## Possible improvements 
 
 To sum-up, the most important improvements would be:
@@ -52,7 +57,7 @@ To sum-up, the most important improvements would be:
 
 More details on the improvements below:
 
-### Throughput 
+### Throughput improvements with async calls
 
 With the current implementation, the default Spring Boot container is used: Tomcat. 
 The maximum number of threads Tomcat sets by default is `200` 
@@ -97,6 +102,12 @@ At the moment, the application is still waiting for the call to finish before re
 - Be more fined-grained on detecting retryable errors. And potentially retry them directly at router level.
 - If POST requests are idempotent (for example, by using a requestId), we can implement even more retry mechanisms.
 
+### HTTP Connection pooling
+By default, RestTemplate creates new Http connection every time and closes the connection once done.
+
+It is possible to have connection pooling under RestTemplate by using a different implementation of the ClientHttpRequestFactory.
+
+
 ### Configuration
 
 Make most Circuit Breaker variables configurable (`SLOW_CALL_DURATION_THRESHOLD_MS`, `RESET_TIMEOUT`, ...) using
@@ -111,5 +122,6 @@ Application URLs configuration:
 - Monitoring. Most of the monitoring implementation can be out-of-the box if we use existing Circuit breaker libraries (e.g: resilience4j)
 - Perform load testing
 - More testing
-- Review logging. Potentially, implement tracing.
+- Review logging
+- Review timeout, sockets and threads sizing, and error handling.
 
