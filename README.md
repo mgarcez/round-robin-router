@@ -23,13 +23,13 @@ Step 1: Start several instances of Application API servers
 Step 2: Start the router
 ```shell
 # Compile
-./mvnw clean install
+mvn clean install
 
 # Start the server
-./mvnw spring-boot:run
+mvn spring-boot:run
 ```
 
-Step 3: Send POST requests
+Send POST requests
 ```shell
 # Example
 curl -X POST -H "Content-Type: application/json" -d '{

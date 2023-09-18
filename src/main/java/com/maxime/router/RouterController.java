@@ -12,11 +12,9 @@ import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
 import java.net.ConnectException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
 
 @RestController
 @RequestMapping("/api")
@@ -26,11 +24,9 @@ public class RouterController {
 
     static final int SLOW_CALL_DURATION_THRESHOLD_MS = 5000;
 
-    private final AtomicInteger currentInstanceIndex = new AtomicInteger(0);
-
-    private final List<ApplicationApiInstance> applicationApiInstances;
-
     private final RestTemplate restTemplate;
+
+    private final RoundRobinRouting roundRobinRouting;
 
     public RouterController() {
         this(Arrays.asList(
@@ -46,22 +42,15 @@ public class RouterController {
 
     RouterController(List<String> applicationApiUrls, RestTemplate restTemplate) {
         this.restTemplate = restTemplate;
-        if (applicationApiUrls == null || applicationApiUrls.size() == 0) {
-            throw new IllegalArgumentException("Cannot start a router with a null or empty Application API Urls list.");
-        }
-
-        applicationApiInstances = new ArrayList<>(applicationApiUrls.size());
-        for (String applicationApiUrl : applicationApiUrls) {
-            applicationApiInstances.add(new ApplicationApiInstance(applicationApiUrl));
-        }
-
-        logger.info("Starting Router with following Urls: " + applicationApiUrls);
+        roundRobinRouting = new RoundRobinRouting(applicationApiUrls);
     }
 
     @PostMapping("/router")
     public ResponseEntity<Object> routeRequest(@RequestBody Map<String, Object> requestData) {
-        for (int i = 0; i < applicationApiInstances.size(); i++) {
-            ApplicationApiInstance applicationApiInstance = getNextInstanceUrl();
+
+        // Try to send the request to an instance with no open circuit
+        for (int i = 0; i < roundRobinRouting.getInstancesCount(); i++) {
+            ApplicationApiInstance applicationApiInstance = roundRobinRouting.getNextInstanceUrl();
             if (applicationApiInstance.acquirePermission()) {
                 return sendRequest(requestData, applicationApiInstance);
             } else {
@@ -85,7 +74,7 @@ public class RouterController {
                     Object.class
             );
             long endTime = System.currentTimeMillis();
-            if (isSlowCall(startTime, endTime)) {
+            if (isSlowCall(startTime, endTime)) { //TODO use callback instead, to report failure faster
                 logger.warn("Downstream server " + applicationApiInstance.getApplicationApiUrl()
                         + " took too long to answer: " + (endTime - startTime) + " MS.");
                 applicationApiInstance.reportFailure();
@@ -123,12 +112,5 @@ public class RouterController {
         return response.getStatusCode().is5xxServerError()
                 || response.getStatusCode() == HttpStatus.REQUEST_TIMEOUT
                 || response.getStatusCode() == HttpStatus.TOO_MANY_REQUESTS;
-    }
-
-    ApplicationApiInstance getNextInstanceUrl() {
-        int nextIndex = currentInstanceIndex.getAndUpdate(
-                (x) -> (x >= applicationApiInstances.size() - 1) ? 0 : x + 1
-        );
-        return applicationApiInstances.get(nextIndex);
     }
 }
