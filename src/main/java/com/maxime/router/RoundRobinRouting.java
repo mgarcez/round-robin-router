@@ -5,12 +5,11 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
 
 public class RoundRobinRouting {
 
     private static final Logger logger = LoggerFactory.getLogger(RoundRobinRouting.class);
-    private final AtomicInteger currentInstanceIndex = new AtomicInteger(0);
+    private int currentInstanceIndex = -1;
 
     private final List<ApplicationApiInstance> applicationApiInstances;
 
@@ -27,14 +26,15 @@ public class RoundRobinRouting {
         }
     }
 
-    public ApplicationApiInstance getNextInstanceUrl() {
-        int nextIndex = currentInstanceIndex.getAndUpdate(
-                (x) -> (x >= applicationApiInstances.size() - 1) ? 0 : x + 1
-        );
-        return applicationApiInstances.get(nextIndex);
-    }
-
-    public int getInstancesCount(){
-        return applicationApiInstances.size();
+    public synchronized ApplicationApiInstance getNextInstanceUrl() {
+        for (int i = 0; i < applicationApiInstances.size(); i++) {
+            currentInstanceIndex = (currentInstanceIndex >= applicationApiInstances.size() -1) ? 0 : currentInstanceIndex + 1;
+            ApplicationApiInstance nextInstance = applicationApiInstances.get(currentInstanceIndex);
+            if(nextInstance.acquirePermission()){
+                return nextInstance;
+            }
+            logger.debug("Downstream server " + nextInstance.getApplicationApiUrl() + " is skipped because it has its circuit open.");
+        }
+        return null;
     }
 }
