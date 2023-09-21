@@ -50,6 +50,8 @@ public class RouterController {
 
         // Try to send the request to an instance with no open circuit
         for (int i = 0; i < roundRobinRouting.getInstancesCount(); i++) {
+            // TODO With the current implementation, it can happen that getNextInstanceUrl returns an url that has already been tried.
+            // This can happen because of concurrency, and can lead to returning "no healthy instance" even if some instances are healthy.
             ApplicationApiInstance applicationApiInstance = roundRobinRouting.getNextInstanceUrl();
             if (applicationApiInstance.acquirePermission()) {
                 return sendRequest(requestData, applicationApiInstance);
