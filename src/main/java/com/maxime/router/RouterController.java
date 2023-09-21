@@ -56,7 +56,7 @@ public class RouterController {
             if (applicationApiInstance.acquirePermission()) {
                 return sendRequest(requestData, applicationApiInstance);
             } else {
-                logger.warn("Downstream server " + applicationApiInstance.getApplicationApiUrl()
+                logger.debug("Downstream server " + applicationApiInstance.getApplicationApiUrl()
                         + " is skipped because it has its circuit open.");
             }
         }
