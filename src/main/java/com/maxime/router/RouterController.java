@@ -47,24 +47,15 @@ public class RouterController {
 
     @PostMapping("/router")
     public ResponseEntity<Object> routeRequest(@RequestBody Map<String, Object> requestData) {
-
-        // Try to send the request to an instance with no open circuit
-        for (int i = 0; i < roundRobinRouting.getInstancesCount(); i++) {
-            // TODO With the current implementation, it can happen that getNextInstanceUrl returns an url that has already been tried.
-            // This can happen because of concurrency, and can lead to returning "no healthy instance" even if some instances are healthy.
-            ApplicationApiInstance applicationApiInstance = roundRobinRouting.getNextInstanceUrl();
-            if (applicationApiInstance.acquirePermission()) {
-                return sendRequest(requestData, applicationApiInstance);
-            } else {
-                logger.warn("Downstream server " + applicationApiInstance.getApplicationApiUrl()
-                        + " is skipped because it has its circuit open.");
-            }
+        ApplicationApiInstance applicationApiInstance = roundRobinRouting.getNextInstanceUrl();
+        if (applicationApiInstance != null) {
+            return sendRequest(requestData, applicationApiInstance);
+        } else {
+            // Handle the case when no healthy instance is available
+            logger.warn("No healthy Application API instances available. The request was not processed.");
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body("No healthy Application API instances available. The request was not processed. You can retry again later.");
         }
-
-        // Handle the case when no healthy instance is available
-        logger.warn("No healthy Application API instances available. The request was not processed.");
-        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                .body("No healthy Application API instances available. The request was not processed. You can retry again later.");
     }
 
     private ResponseEntity<Object> sendRequest(Map<String, Object> requestData, ApplicationApiInstance applicationApiInstance) {
